@@ -185,6 +185,19 @@ var matchTests = []MatchTest{
 	{"e/\\?", "e/**", false, nil, true, !onWindows, 1, 1},
 }
 
+var matchFilepathGlobTests = []MatchTest{
+	{".", ".", true, nil, true, !onWindows, 1, 1},
+	{"././.", ".", true, nil, true, !onWindows, 1, 1},
+	{"..", "..", true, nil, true, !onWindows, 1, 1},
+	{"../.", "..", true, nil, true, !onWindows, 1, 1},
+	{".././././", "..", true, nil, true, !onWindows, 1, 1},
+	{"../..", "../..", true, nil, true, !onWindows, 1, 1},
+	{"/", "/", true, nil, true, !onWindows, 1, 1},
+	{"./", ".", true, nil, true, !onWindows, 1, 1},
+	{"/.", "/", true, nil, true, !onWindows, 1, 1},
+	{"/././././", "/", true, nil, true, !onWindows, 1, 1},
+}
+
 func TestValidatePattern(t *testing.T) {
 	for idx, tt := range matchTests {
 		testValidatePatternWith(t, idx, tt)
@@ -427,7 +440,7 @@ func TestFilepathGlob(t *testing.T) {
 	}()
 	os.Chdir("test")
 
-	for idx, tt := range matchTests {
+	for idx, tt := range append(matchTests, matchFilepathGlobTests...) {
 		if tt.testOnDisk {
 			ttmod := tt
 			ttmod.pattern = filepath.FromSlash(tt.pattern)
@@ -449,7 +462,18 @@ func testFilepathGlobWith(t *testing.T, idx int, tt MatchTest, fsys fs.FS) {
 
 	if tt.isStandard {
 		stdMatches, stdErr := filepath.Glob(tt.pattern)
-		if !compareSlices(matches, stdMatches) || !compareErrors(err, stdErr) {
+		dm := make([]string, len(matches))
+		sm := make([]string, len(stdMatches))
+		// Invoke filepath.Clean() because filepath.Glob() may return []string{"../."},
+		// whereas doublestar.FilepathGlob() may return []string{".."}.
+		// Both are equivalent but not the same.
+		for i, m := range matches {
+			dm[i] = filepath.Clean(m)
+		}
+		for i, m := range stdMatches {
+			sm[i] = filepath.Clean(m)
+		}
+		if !compareSlices(dm, sm) || !compareErrors(err, stdErr) {
 			t.Errorf("#%v. FilepathGlob(%#q) != filepath.Glob(...). Got %#v, %v want %#v, %v", idx, tt.pattern, matches, err, stdMatches, stdErr)
 		}
 	}
